@@ -48,6 +48,11 @@ class KimiK2Detector(BaseFormatDetector):
     <|tool_calls_section_end|>
     ```
 
+    Format Structure (MCP / kimi-k2-thinking):
+    ```
+    <|tool_call_begin|>functions_{func_name}_{index}<|tool_call_argument_begin|>{json_args}<|tool_call_end|>
+    ```
+
     Format Structure (bare counter — model omits function name):
     ```
     <|tool_call_begin|>{counter}<|tool_call_argument_begin|>{json_args}<|tool_call_end|>
@@ -85,6 +90,10 @@ class KimiK2Detector(BaseFormatDetector):
         self.tool_call_id_regex = re.compile(
             r"^(?:functions\.)?(?P<name>[\w.\-]+):(?P<index>\d+)$"
         )
+        # MCP / kimi-k2-thinking: "functions_mcp--foo--bar_2"
+        self.tool_call_id_mcp_regex = re.compile(
+            r"^functions_(?P<name>.+)_(?P<index>\d+)$"
+        )
         # Bare call counter: "0", "3" (model uses auto-incrementing counter)
         self.tool_call_id_counter_regex = re.compile(r"^\d+$")
 
@@ -94,6 +103,7 @@ class KimiK2Detector(BaseFormatDetector):
         """Parse a tool call ID into (function_name, call_index).
 
         Standard format: "functions.ReadFile:0" → ("ReadFile", 0)
+        MCP format:      "functions_mcp--foo--bar_2" → ("mcp--foo--bar", 2)
         Bare counter:    "3" → call_index=3, infer name from arguments.
 
         The bare counter is a conversation-level auto-increment, NOT an index
@@ -101,6 +111,10 @@ class KimiK2Detector(BaseFormatDetector):
         keys against tool parameter schemas.
         """
         m = self.tool_call_id_regex.match(function_id)
+        if m:
+            return m.group("name"), int(m.group("index"))
+
+        m = self.tool_call_id_mcp_regex.match(function_id)
         if m:
             return m.group("name"), int(m.group("index"))
 
@@ -406,6 +420,10 @@ class KimiK2Detector(BaseFormatDetector):
             return self._infer_tool_name(tools, function_args)
 
         m = self.tool_call_id_regex.match(function_id)
+        if m:
+            return m.group("name")
+
+        m = self.tool_call_id_mcp_regex.match(function_id)
         if m:
             return m.group("name")
 
